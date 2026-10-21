@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { InputError, LedgerError } from '../core/errors.js';
 
-export const CURRENT_SCHEMA = 1;
+export const CURRENT_SCHEMA = 2;
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS submissions (
@@ -29,6 +29,41 @@ const SCHEMA = `
     hash TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_events_submission ON events(submission_id, seq);
+`;
+
+const DELIVERY_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS delivery_outbox (
+    id TEXT PRIMARY KEY NOT NULL,
+    submission_id TEXT NOT NULL REFERENCES submissions(id),
+    destination TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'leased', 'retry', 'delivered', 'dead')),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts >= 0),
+    max_attempts INTEGER NOT NULL DEFAULT 5 CHECK(max_attempts BETWEEN 1 AND 20),
+    next_attempt_at TEXT NOT NULL,
+    lease_token TEXT,
+    leased_until TEXT,
+    created_at TEXT NOT NULL,
+    delivered_at TEXT,
+    last_http_status INTEGER,
+    last_error_code TEXT,
+    UNIQUE (submission_id, destination)
+  );
+  CREATE INDEX IF NOT EXISTS idx_outbox_due ON delivery_outbox(status, next_attempt_at);
+  CREATE INDEX IF NOT EXISTS idx_outbox_lease ON delivery_outbox(status, leased_until);
+  CREATE INDEX IF NOT EXISTS idx_outbox_submission ON delivery_outbox(submission_id, created_at);
+
+  CREATE TABLE IF NOT EXISTS delivery_attempts (
+    id TEXT PRIMARY KEY NOT NULL,
+    delivery_id TEXT NOT NULL REFERENCES delivery_outbox(id),
+    attempt_number INTEGER NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    outcome TEXT NOT NULL CHECK(outcome IN ('in_flight', 'delivered', 'retry', 'dead', 'abandoned')),
+    http_status INTEGER,
+    error_code TEXT,
+    UNIQUE(delivery_id, attempt_number)
+  );
+  CREATE INDEX IF NOT EXISTS idx_delivery_attempts ON delivery_attempts(delivery_id, attempt_number);
 `;
 
 function configure(db: DatabaseSync): void {
@@ -61,7 +96,30 @@ export function initializeLedger(path: string): { path: string; created: boolean
       throw new LedgerError('The existing SQLite file is not a SubmissionLedger database.');
     }
     if (version === 0) {
-      db.exec(`BEGIN IMMEDIATE; ${SCHEMA} PRAGMA user_version = ${CURRENT_SCHEMA}; COMMIT;`);
+      db.exec('BEGIN IMMEDIATE;');
+      try {
+        db.exec(SCHEMA);
+        db.exec("ALTER TABLE submissions ADD COLUMN delivery_spec_json TEXT NOT NULL DEFAULT '[]';");
+        db.exec(DELIVERY_SCHEMA);
+        db.exec(`PRAGMA user_version = ${CURRENT_SCHEMA};`);
+        db.exec('COMMIT;');
+      } catch (error) {
+        if (db.isTransaction) db.exec('ROLLBACK;');
+        throw error;
+      }
+    }
+    if (version === 1) {
+      // Adding delivery tables does not alter the existing submissions or event hashes.
+      db.exec('BEGIN IMMEDIATE;');
+      try {
+        db.exec("ALTER TABLE submissions ADD COLUMN delivery_spec_json TEXT NOT NULL DEFAULT '[]';");
+        db.exec(DELIVERY_SCHEMA);
+        db.exec(`PRAGMA user_version = ${CURRENT_SCHEMA};`);
+        db.exec('COMMIT;');
+      } catch (error) {
+        if (db.isTransaction) db.exec('ROLLBACK;');
+        throw error;
+      }
     }
     db.exec('PRAGMA journal_mode = WAL;');
     return { path: location, created: !existed || version === 0 };

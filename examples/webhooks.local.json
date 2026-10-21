@@ -1,0 +1,8 @@
+{
+  "destinations": {
+    "demo": {
+      "url": "http://127.0.0.1:9099/webhook",
+      "secretEnv": "SL_DEMO_SIGNING_SECRET"
+    }
+  }
+}

@@ -1,18 +1,25 @@
 # Changelog
 
-All notable releases are recorded here. Version numbers follow semantic versioning during the pre-v1 period.
+All notable changes to SubmissionLedger are documented here. Releases follow semantic versioning while the public API is still under active development.
 
-## 0.2.0 - HTTP intake
+## [0.3.0] - 2026-10-21
 
-- Added a bearer-token-protected HTTP API using the built-in Node.js HTTP server.
-- Added JSON submission intake, replay reporting and conflict status codes.
-- Added record retrieval, filtered pagination, statistics and ledger verification routes.
-- Added request identifiers, bounded request bodies, restricted content types and explicit error responses.
-- Kept the existing SQLite schema and CLI commands compatible with v0.1 data.
-- Added API integration tests, examples, an OpenAPI document and operation notes.
+### Added
+- Persistent SQLite outbox, dispatch attempt history and schema v1 to v2 migration.
+- Atomic destination scheduling at intake and manual enqueue for existing submissions.
+- Signed webhook POST delivery with a standalone worker, lease recovery, fencing and bounded retries.
+- Delivery API endpoints, CLI commands, local example receiver and deployment guidance.
+- New integration tests for retries, delivery signatures, data compatibility and HTTP routes.
 
-## 0.1.0 - Local ledger
+### Notes
+- Outbound delivery is at least once; receivers should deduplicate delivery IDs.
+- The `verify` command and JSONL export cover the intake event ledger, not mutable delivery state.
+- Back up old SQLite databases before migrating. Rollback needs the backup.
 
-- Added SQLite intake, canonical JSON normalization and caller-provided idempotency keys.
-- Added the command-line interface, audit event chain, integrity checks and JSONL export.
-- Added basic regression tests, CI and contribution guidelines.
+## [0.2.0] - 2026-10-21
+
+- Local authenticated HTTP API, request IDs, paging, validation and health endpoint.
+
+## [0.1.0] - 2026-10-21
+
+- Local SQLite intake, idempotency, CLI, linked event hashes and JSONL export.

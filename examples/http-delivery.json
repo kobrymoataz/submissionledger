@@ -1,0 +1,8 @@
+{
+  "source": "demo",
+  "payload": {
+    "reference": "LOCAL-001",
+    "message": "Delivery engine walkthrough"
+  },
+  "destinations": ["demo"]
+}

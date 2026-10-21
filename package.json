@@ -1,7 +1,7 @@
 {
   "name": "submissionledger",
-  "version": "0.2.0",
-  "description": "Local-first submission intake with SQLite, an authenticated HTTP API and auditable event history.",
+  "version": "0.3.0",
+  "description": "Local-first submission intake with durable webhook outbox, signed delivery workers and an auditable event ledger.",
   "type": "module",
   "private": false,
   "license": "MIT",
@@ -29,7 +29,8 @@
     "test": "npm run build && node --test dist/test/*.test.js",
     "check": "npm run typecheck && npm test",
     "cli": "node dist/cli.js",
-    "api": "node dist/api/main.js"
+    "api": "node dist/api/main.js",
+    "worker": "node dist/worker/main.js"
   },
   "devDependencies": {
     "@types/node": "24.0.4",

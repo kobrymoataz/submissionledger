@@ -32,7 +32,7 @@ test('health is public and response includes a generated request ID', async () =
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
     const body = await response.json() as { data: { version: string }; requestId: string };
-    assert.equal(body.data.version, '0.2.0');
+    assert.equal(body.data.version, '0.3.0');
     assert.match(body.requestId, /^[0-9a-f-]{36}$/);
     assert.equal(response.headers.get('x-request-id'), body.requestId);
   });

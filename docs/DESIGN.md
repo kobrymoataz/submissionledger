@@ -1,73 +1,25 @@
-# Design and limitations
+# Design notes
 
-## Scope in v0.1
+SubmissionLedger is a local-first TypeScript service using Node's built-in SQLite support.
 
-This release is a synchronous, local command-line tool. A submission is a JSON object of at most 64 KiB after canonical serialization. It is stored in SQLite together with a source namespace, a receipt ID and a SHA-256 digest. Each new submission creates one acceptance event in the same database transaction.
+## Core operations
 
-The CLI does not run a server or schedule email/webhook delivery. Future versions may add those as separate, durable operations.
+The intake flow validates JSON, normalizes it deterministically and computes a SHA-256 hash. An explicit idempotency key is unique within its source. A single SQLite transaction stores the submission, its acceptance event and optionally the queued outbox rows. Replay responses do not add another acceptance event. The original delivery destination set is stored separately from mutable operational delivery records.
 
-## Retry semantics
+The event log uses SHA-256 links to detect accidental modifications. It is not protected by an independent trust anchor; a privileged editor could rewrite the local chain. `verify` and JSONL export continue to cover **only** submissions and acceptance events.
 
-Idempotency is scoped to `(source, key)`:
+## HTTP boundary
 
-1. No key: every call creates a new submission, including identical payloads.
-2. New key: persist the submission and an event atomically.
-3. Known key, identical canonical JSON: return the original ID with `outcome: replayed`.
-4. Known key, different JSON: report a conflict without overwriting the original.
+The REST server uses Node's HTTP primitives. It requires a single bearer token for `/v1` requests, validates request bodies and enforces size limits. By default it only binds to loopback. All new delivery routes follow the v0.2 response envelope and use only operator-configured destinations.
 
-JSON object keys are sorted recursively for comparisons. Array order and string contents remain significant. Only JSON objects are accepted as submissions. The key must be supplied by the caller; a content hash is not used as a deduplication key.
+## Outbox
 
-For a browser form, generate the key once per user action and reuse it only for retries of that action. Do not use a constant key for all visitors.
+SQLite schema v2 adds one outbox job per submission/destination and an attempt table. Jobs are leased transactionally with `BEGIN IMMEDIATE`, providing basic competing-worker safety on a single SQLite host. A lease token fences stale completion writes. Expired leases may be reclaimed and delivered again, so a remote receiver must deduplicate by the stable delivery ID.
 
-## SQLite
+The worker signs outbound JSON with HMAC-SHA256, requires HTTPS except explicitly allowed loopback HTTP, and never follows redirects or saves response bodies. `Retry-After` and exponential backoff govern bounded retries, with dead jobs retained for operator inspection. The worker is independently deployable and cannot be replaced with the API's HTTP process without changing the concurrency model.
 
-The schema is versioned through `PRAGMA user_version`. Release v0.1 supports schema version 1. SQLite transactions ensure the submission row and its acceptance event either both commit or neither commits. WAL allows practical local reads and writes. The tool sets a 5-second SQLite busy timeout to handle brief write contention.
+Read [DELIVERY.md](DELIVERY.md) for the wire format, failure behavior and migration instructions.
 
-A database created by a newer schema version is rejected rather than silently downgraded. Import and migration tools are not implemented yet.
+## Not implemented
 
-## Event history
-
-Events are ordered by an integer sequence. Each event stores:
-
-- event ID, linked submission ID and event type
-- event metadata (source, key and payload digest)
-- timestamp in UTC
-- previous event hash and current hash
-
-`verify` checks stored payload digests, event digests, hash links, event-to-submission consistency, missing acceptance events, and SQLite's integrity and foreign-key checks.
-
-**Not an external trust anchor:** a person with write access can modify records and calculate new hashes. The current design provides a way to discover accidental corruption, not cryptographic proof of authorship, time or non-repudiation.
-
-## Security and privacy
-
-- This release does **not** encrypt payloads at rest. The SQLite file and JSONL exports may contain personal information.
-- Database contents never leave the machine through SubmissionLedger; npm and GitHub tooling have their own network behavior.
-- `list` hides payload bodies, but `get` and `export` expose them to the local operator.
-- Secure access to the host, directory, databases, backups and terminal history with operating-system controls.
-- `.gitignore` excludes ledger databases and JSONL files, but do not rely on `.gitignore` as a complete data loss prevention tool.
-- Do not store passwords, access tokens, payment card data or unnecessary personal information in submissions.
-- No user authentication, access control, record deletion/retention workflow, consent management or legal compliance guarantees are provided.
-
-If you need a multi-user intake service or regulated data processing, v0.1 is not sufficient by itself.
-
-## Known limits
-
-- The JSONL export is produced in memory, so it is intended for small ledgers. Large-data streaming exports are future work.
-- Timestamps come from the local system clock; they are not independently attested.
-- No import/restore command exists yet.
-- SQLite's `node:sqlite` module is marked experimental on some supported Node versions.
-- No background scheduler, recovery queue or remote delivery exists in this release.
-
-## HTTP API (v0.2)
-
-The v0.2 HTTP service reuses the existing v0.1 database schema and domain functions. It adds no migrations, processing workers or external dependencies at runtime. When a POST arrives, it validates the JSON envelope, applies the same 64 KiB canonical-payload limit and commits the record and acceptance event in one transaction. The server uses a 96 KiB raw-body limit and a 15-second request timeout.
-
-Each request gets a generated request ID in the response header and body. CLI and HTTP writes use the same `(source, idempotency_key)` unique constraint, so a retry across those interfaces has the same result. An idempotency key is a retry identifier, not a business-level duplicate detector.
-
-List pagination uses `LIMIT/OFFSET` with a maximum offset of 10000. New submissions may change the ordering between pages. Export or a database-level snapshot should be used for consistent full-ledger processing.
-
-All `/v1` routes require one bearer token. The `/health` route is intentionally public and reports only whether the process is listening. API request logs contain method, status, time and request ID, not the payload or token. This version has no TLS listener, user-specific permissions, rate limiter, retention handling or encryption at rest. Bind to loopback for local use; do not expose the service directly to an untrusted network.
-
-`/v1/ledger/verify` performs the existing full ledger check synchronously. It is an operator tool, not a lightweight health probe. On large ledgers the event loop can be blocked during that check. A later version should move expensive validation to a dedicated worker.
-
-The linked SHA-256 event hashes are consistency checks, not authenticated records. A database administrator can recalculate the chain after modifying data. Do not describe this as a cryptographically tamper-proof audit log.
+No distributed consensus, multi-tenant access control, encrypted storage, email transport, automatic dead-letter replay, per-destination rate limits, hosted dashboard, retention scheduler or production readiness certification is provided at this stage.

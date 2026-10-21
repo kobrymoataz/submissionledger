@@ -19,6 +19,7 @@ export interface SubmitInput {
   payload: unknown;
   source?: string;
   idempotencyKey?: string;
+  destinations?: string[];
 }
 
 export interface SubmitResult {

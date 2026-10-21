@@ -1,11 +1,11 @@
 import { InputError } from '../core/errors.js';
 
-type ValueFlag = 'db' | 'file' | 'data' | 'source' | 'key' | 'limit' | 'output';
-type BooleanFlag = 'json' | 'help' | 'version';
+type ValueFlag = 'db' | 'file' | 'data' | 'source' | 'key' | 'limit' | 'output' | 'config' | 'deliver-to' | 'destination' | 'submission' | 'status' | 'offset';
+type BooleanFlag = 'json' | 'help' | 'version' | 'allow-local-http';
 type Flag = ValueFlag | BooleanFlag;
 
-const VALUE_FLAGS = new Set<string>(['db', 'file', 'data', 'source', 'key', 'limit', 'output']);
-const BOOLEAN_FLAGS = new Set<string>(['json', 'help', 'version']);
+const VALUE_FLAGS = new Set<string>(['db', 'file', 'data', 'source', 'key', 'limit', 'output', 'config', 'deliver-to', 'destination', 'submission', 'status', 'offset']);
+const BOOLEAN_FLAGS = new Set<string>(['json', 'help', 'version', 'allow-local-http']);
 
 export interface Arguments {
   command: string;
