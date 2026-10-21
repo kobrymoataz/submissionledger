@@ -5,6 +5,8 @@ import { checkUsage, getString, hasFlag, parseArguments } from './cli/arguments.
 import { printStats, printSubmission, printSubmissionDetails, printSubmissionList, printValue } from './cli/format.js';
 import { ConflictError, InputError, LedgerError } from './core/errors.js';
 import { acceptSubmission, getSubmission, ledgerStats, listSubmissions } from './ledger/submissions.js';
+import { exportLedger } from './ledger/export.js';
+import { verifyLedger } from './ledger/verification.js';
 import { initializeLedger } from './storage/sqlite.js';
 
 const HELP = `SubmissionLedger v0.1.0
@@ -110,6 +112,30 @@ function run(): void {
     case 'stats': {
       checkUsage(args, [], 0);
       printStats(ledgerStats(path), json);
+      break;
+    }
+    case 'verify': {
+      checkUsage(args, [], 0);
+      const result = verifyLedger(path);
+      if (json) printValue(result, true);
+      else {
+        console.log(result.ok ? 'Ledger integrity: OK' : 'Ledger integrity: FAILED');
+        console.log(`Submissions: ${result.submissions}  Events: ${result.events}`);
+        for (const issue of result.issues) console.log(`  [${issue.code}] ${issue.detail}`);
+      }
+      if (!result.ok) process.exitCode = 1;
+      break;
+    }
+    case 'export': {
+      checkUsage(args, ['output'], 0);
+      const output = getString(args, 'output');
+      if (!output) throw new InputError('Missing required option --output.');
+      const result = exportLedger(path, output);
+      if (json) printValue(result, true);
+      else {
+        console.log(`Exported ${result.submissions} submissions and ${result.events} events to ${result.path}`);
+        console.log('Note: The export contains full submission payloads. Store it securely.');
+      }
       break;
     }
     default:
