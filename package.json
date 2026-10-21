@@ -1,0 +1,37 @@
+{
+  "name": "submissionledger",
+  "version": "0.1.0",
+  "description": "A local-first submission ledger with SQLite, idempotent intake and an auditable event log.",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "author": "Moataz Kobry",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kobrymoataz/submissionledger.git"
+  },
+  "homepage": "https://github.com/kobrymoataz/submissionledger#readme",
+  "bugs": "https://github.com/kobrymoataz/submissionledger/issues",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "bin": {
+    "submissionledger": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "check": "npm run typecheck && npm test",
+    "cli": "node dist/cli.js"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.4",
+    "typescript": "5.8.3"
+  }
+}
