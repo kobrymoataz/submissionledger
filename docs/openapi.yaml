@@ -1,11 +1,43 @@
 openapi: 3.1.0
 info:
   title: SubmissionLedger API
-  version: 0.2.0
-  summary: Authenticated local intake with explicit retry semantics
-  description: The API stores JSON submissions in a local SQLite ledger. HTTPS and network controls are not built into the application.
+  version: 0.3.0
+  description: Local submission intake and durable named webhook delivery.
 servers:
   - url: http://127.0.0.1:8787
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    ErrorEnvelope:
+      type: object
+      properties:
+        requestId: { type: string }
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+    Intake:
+      type: object
+      additionalProperties: false
+      required: [payload]
+      properties:
+        source: { type: string, default: api }
+        payload: { type: object }
+        destinations:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items: { type: string }
+    Queue:
+      type: object
+      additionalProperties: false
+      required: [destination]
+      properties:
+        destination: { type: string }
 security:
   - bearerAuth: []
 paths:
@@ -14,113 +46,105 @@ paths:
       summary: Process health
       security: []
       responses:
-        '200':
-          description: Process is running
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Envelope'
+        '200': { description: Service running }
   /v1/submissions:
     post:
-      summary: Accept a submission
+      summary: Accept a submission and optionally queue webhooks atomically
       parameters:
-        - name: Idempotency-Key
-          in: header
-          required: false
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 128
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string }
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [payload]
-              additionalProperties: false
-              properties:
-                source:
-                  type: string
-                  default: api
-                  minLength: 1
-                  maxLength: 64
-                payload:
-                  type: object
-                  additionalProperties: true
+            schema: { $ref: '#/components/schemas/Intake' }
       responses:
-        '201':
-          description: Newly accepted submission
-        '200':
-          description: Existing submission replayed
-        '409':
-          description: Same source and key used with different data
-        '422':
-          description: Invalid payload or fields
+        '201': { description: New submission }
+        '200': { description: Idempotent replay }
+        '409': { description: Idempotency conflict }
+        '422': { description: Invalid input or destination }
     get:
-      summary: List submission summaries
+      summary: List recent submissions without payloads
       parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-        - name: offset
-          in: query
-          schema:
-            type: integer
-            minimum: 0
-            maximum: 10000
-            default: 0
-        - name: source
-          in: query
-          schema:
-            type: string
+        - in: query
+          name: source
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, maximum: 10000 }
       responses:
-        '200':
-          description: Paged submission summaries, without payloads
+        '200': { description: Paged submission summaries }
   /v1/submissions/{id}:
     get:
-      summary: Read a submission
+      summary: Retrieve full submission
       parameters:
-        - name: id
-          in: path
+        - in: path
+          name: id
           required: true
-          schema:
-            type: string
-            format: uuid
+          schema: { type: string, format: uuid }
       responses:
-        '200':
-          description: Full submission including payload
-        '404':
-          description: Submission not found
+        '200': { description: Submission detail }
+        '404': { description: Not found }
+  /v1/submissions/{id}/deliveries:
+    post:
+      summary: Queue one configured webhook for an existing submission
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Queue' }
+      responses:
+        '201': { description: New delivery job }
+        '200': { description: Existing delivery job }
+        '404': { description: Submission not found }
+        '422': { description: Unconfigured destination }
+  /v1/deliveries:
+    get:
+      summary: List deliveries without payloads
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [pending, leased, retry, delivered, dead] }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, maximum: 10000 }
+      responses:
+        '200': { description: Paged delivery statuses }
+  /v1/deliveries/stats:
+    get:
+      summary: Delivery counts by status
+      responses:
+        '200': { description: Status counts }
+  /v1/deliveries/{id}:
+    get:
+      summary: Delivery and attempt history
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Delivery with attempts }
+        '404': { description: Not found }
   /v1/stats:
     get:
-      summary: Ledger statistics
+      summary: Intake statistics
       responses:
-        '200':
-          description: Counts and source breakdown
+        '200': { description: Counters by source }
   /v1/ledger/verify:
     get:
-      summary: Check ledger integrity
-      description: HTTP 200 may contain ok false when inconsistencies are found.
+      summary: Verify the acceptance event chain
       responses:
-        '200':
-          description: Consistency report
-components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: opaque
-  schemas:
-    Envelope:
-      type: object
-      required: [data, requestId]
-      properties:
-        data: {}
-        requestId:
-          type: string
-          format: uuid
+        '200': { description: Integrity report (does not include outbox) }

@@ -1,75 +1,54 @@
 # Command-line reference
 
-Examples assume dependencies have been installed and the project has been compiled (`npm ci && npm run build`). Replace `npm run cli --` with `submissionledger` if you install the package as a CLI.
+Build with `npm run build`, then invoke `npm run cli -- <command>`. The commands use the same database as the API/worker and accept `--db PATH` or `SUBMISSIONLEDGER_DB`.
 
-## Initialize
+## Intake and inspection
 
 ```bash
 npm run cli -- init
-npm run cli -- init --db ./work/intake.sqlite
-```
-
-Re-running `init` on an existing SubmissionLedger database is safe. An unfamiliar nonempty database is rejected.
-
-## Accept submissions
-
-```bash
-npm run cli -- submit \
-  --file ./examples/application.json \
-  --source admissions \
-  --key admission-2026-001 \
-  --json
-```
-
-For small manual tests, inline JSON works:
-
-```bash
-npm run cli -- submit --data '{"interest":"data engineering"}'
-```
-
-The JSON root must be an object, not an array or string. The canonical payload has a 64 KiB limit; input files have a 256 KiB raw size limit.
-
-## Inspect
-
-```bash
-npm run cli -- list --limit 10
-npm run cli -- list --source admissions --json
-npm run cli -- get SUBMISSION_ID
-npm run cli -- stats --json
-```
-
-`get` shows the full payload. Treat CLI output as potentially sensitive.
-
-## Check and export
-
-```bash
-npm run cli -- verify --json
-npm run cli -- export --output ./private-backups/ledger.jsonl
-```
-
-The export writes a manifest line, followed by submission lines and event lines. It will not overwrite an existing file. The export is refused when integrity checks fail.
-
-## Database location
-
-By default, the database is created in `./.submissionledger/ledger.sqlite`, relative to the current working directory. You can also set an environment variable:
-
-```bash
-export SUBMISSIONLEDGER_DB="$HOME/ledger-data/intake.sqlite"
-npm run cli -- init
+npm run cli -- submit --file examples/application.json --source website --key application-001
+npm run cli -- list --limit 20
+npm run cli -- get YOUR_SUBMISSION_UUID
 npm run cli -- stats
+npm run cli -- verify
+npm run cli -- export --output ./backups/submissions.jsonl
 ```
 
-`--db PATH` overrides the environment variable for that command.
+`init` creates or migrates the schema. Back up existing v0.2 databases before calling it in v0.3. `submit` accepts `--data JSON` instead of `--file PATH`. `--key` is optional; without it, repeats create distinct submissions. `--json` is available on the CLI.
 
-## Exit statuses
+## Queue deliveries
 
-- `0`: command completed; a replay of an identical request is also successful
-- `1`: general error, or `verify` found integrity problems
-- `2`: invalid command, input, parameters, or missing ledger
-- `3`: idempotency key conflict (same source/key, different payload)
+The destination must be present in your operator-managed JSON configuration:
 
-Human output is the default. Use `--json` for programmatic consumers. Exceptions are printed without a stack trace unless `SUBMISSIONLEDGER_DEBUG=1` is set.
+```bash
+npm run cli -- submit --file examples/application.json --source website \
+  --key application-002 --deliver-to demo \
+  --config examples/webhooks.local.json --allow-local-http
+```
 
-## API server in v0.2
+To queue an already accepted submission:
 
-The API is a separate process, not a replacement for the CLI. Once a ledger is initialized, set `SUBMISSIONLEDGER_API_TOKEN` to a strong secret and run `npm run api`. The CLI and API use the same default database path; keep both commands in the same project directory or set `SUBMISSIONLEDGER_DB` explicitly. See [HTTP API](API.md) for examples and authentication rules.
+```bash
+npm run cli -- enqueue --submission YOUR_SUBMISSION_UUID --destination demo \
+  --config examples/webhooks.local.json --allow-local-http
+```
+
+The `--deliver-to` argument is a comma-separated list of names, not URLs. Queueing the same submission/destination pair twice returns the existing job.
+
+## Delivery operations
+
+```bash
+npm run cli -- deliveries
+npm run cli -- deliveries --status retry --limit 20 --offset 0
+npm run cli -- delivery YOUR_DELIVERY_UUID
+npm run cli -- delivery-stats
+```
+
+## Worker
+
+```bash
+export SL_DEMO_SIGNING_SECRET="$(cat "$HOME/.config/submissionledger/demo-secret")"
+npm run worker -- --config examples/webhooks.local.json --allow-local-http --once
+```
+
+Omit `--once` to poll continuously. Worker options include `--db`, `--poll-ms`, `--timeout-ms`, `--lease-ms` and `--max-batch`. See [delivery details](DELIVERY.md).
