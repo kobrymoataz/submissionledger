@@ -69,3 +69,7 @@ npm run cli -- stats
 - `3`: idempotency key conflict (same source/key, different payload)
 
 Human output is the default. Use `--json` for programmatic consumers. Exceptions are printed without a stack trace unless `SUBMISSIONLEDGER_DEBUG=1` is set.
+
+## API server in v0.2
+
+The API is a separate process, not a replacement for the CLI. Once a ledger is initialized, set `SUBMISSIONLEDGER_API_TOKEN` to a strong secret and run `npm run api`. The CLI and API use the same default database path; keep both commands in the same project directory or set `SUBMISSIONLEDGER_DB` explicitly. See [HTTP API](API.md) for examples and authentication rules.

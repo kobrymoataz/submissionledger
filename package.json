@@ -1,7 +1,7 @@
 {
   "name": "submissionledger",
-  "version": "0.1.0",
-  "description": "A local-first submission ledger with SQLite, idempotent intake and an auditable event log.",
+  "version": "0.2.0",
+  "description": "Local-first submission intake with SQLite, an authenticated HTTP API and auditable event history.",
   "type": "module",
   "private": false,
   "license": "MIT",
@@ -28,7 +28,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/test/*.test.js",
     "check": "npm run typecheck && npm test",
-    "cli": "node dist/cli.js"
+    "cli": "node dist/cli.js",
+    "api": "node dist/api/main.js"
   },
   "devDependencies": {
     "@types/node": "24.0.4",

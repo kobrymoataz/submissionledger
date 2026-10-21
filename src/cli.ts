@@ -8,8 +8,9 @@ import { acceptSubmission, getSubmission, ledgerStats, listSubmissions } from '.
 import { exportLedger } from './ledger/export.js';
 import { verifyLedger } from './ledger/verification.js';
 import { initializeLedger } from './storage/sqlite.js';
+import { VERSION } from './version.js';
 
-const HELP = `SubmissionLedger v0.1.0
+const HELP = `SubmissionLedger v0.2.0
 
 Usage: submissionledger <command> [options]
 
@@ -36,7 +37,7 @@ Examples:
   submissionledger get 00000000-0000-0000-0000-000000000000
 
 Without --key, two identical payloads are treated as separate submissions.
-The ledger is local. Data is not encrypted at rest. Don't commit database files.
+The ledger is local by default. Data is not encrypted at rest. Don't commit database files.
 `;
 
 function parsePayload(args: ReturnType<typeof parseArguments>): unknown {
@@ -65,7 +66,7 @@ function parsePayload(args: ReturnType<typeof parseArguments>): unknown {
 function run(): void {
   const args = parseArguments(process.argv.slice(2));
   if (hasFlag(args, 'version')) {
-    console.log('0.1.0');
+    console.log(VERSION);
     return;
   }
   if (hasFlag(args, 'help') || args.command === 'help') {
