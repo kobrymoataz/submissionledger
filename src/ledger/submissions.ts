@@ -6,12 +6,14 @@ import type { LedgerStats, Submission, SubmissionSummary, SubmitInput, SubmitRes
 import { validateIdempotencyKey, validateLimit, validateSource } from '../core/validation.js';
 import { withLedger } from '../storage/sqlite.js';
 import { appendAcceptedEvent } from './events.js';
+import { enqueueDeliveryInTransaction, validateDestinations } from './delivery.js';
 
 export interface SubmissionRow {
   id: string;
   source: string;
   idempotency_key: string | null;
   payload_json: string;
+  delivery_spec_json: string;
   payload_sha256: string;
   received_at: string;
 }
@@ -36,6 +38,7 @@ export function acceptSubmission(path: string, input: SubmitInput): SubmitResult
   const source = validateSource(input.source);
   const key = validateIdempotencyKey(input.idempotencyKey);
   const { payloadJson, digest } = preparePayload(input.payload);
+  const destinations = validateDestinations(input.destinations ?? []);
 
   return withLedger(path, (db: DatabaseSync) => {
     db.exec('BEGIN IMMEDIATE;');
@@ -49,6 +52,9 @@ export function acceptSubmission(path: string, input: SubmitInput): SubmitResult
             throw new ConflictError(
               `Idempotency key '${key}' is already associated with a different payload in source '${source}'.`,
             );
+          }
+          if (existing.delivery_spec_json !== JSON.stringify(destinations)) {
+            throw new ConflictError('Idempotency key was previously used with a different delivery destination set.');
           }
           db.exec('COMMIT;');
           return { outcome: 'replayed', submission: fromRow(existing) };
@@ -64,10 +70,11 @@ export function acceptSubmission(path: string, input: SubmitInput): SubmitResult
         receivedAt: new Date().toISOString(),
       };
       db.prepare(`INSERT INTO submissions
-        (id, source, idempotency_key, payload_json, payload_sha256, received_at)
-        VALUES (?, ?, ?, ?, ?, ?)`)
-        .run(submission.id, source, key, payloadJson, digest, submission.receivedAt);
+        (id, source, idempotency_key, payload_json, payload_sha256, received_at, delivery_spec_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(submission.id, source, key, payloadJson, digest, submission.receivedAt, JSON.stringify(destinations));
       appendAcceptedEvent(db, submission);
+      for (const destination of destinations) enqueueDeliveryInTransaction(db, submission.id, destination);
       db.exec('COMMIT;');
       return { outcome: 'accepted', submission };
     } catch (error) {
