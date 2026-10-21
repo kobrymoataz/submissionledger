@@ -23,7 +23,7 @@ function withTemporaryDirectory(run: (cwd: string) => void): void {
 
 test('CLI shows its version and available commands', () => {
   withTemporaryDirectory((cwd) => {
-    assert.equal(runCli(cwd, '--version').stdout.trim(), '0.1.0');
+    assert.equal(runCli(cwd, '--version').stdout.trim(), '0.2.0');
     assert.match(runCli(cwd, 'help').stdout, /submissionledger submit/);
   });
 });
