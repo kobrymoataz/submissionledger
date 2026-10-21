@@ -1,0 +1,10 @@
+{
+  "reference": "EXAMPLE-001",
+  "program": "Open Source Fellowship",
+  "applicant": {
+    "name": "Sample Applicant",
+    "country": "Morocco"
+  },
+  "interests": ["open source", "reliable systems"],
+  "consentToContact": false
+}
