@@ -57,3 +57,17 @@ If you need a multi-user intake service or regulated data processing, v0.1 is no
 - No import/restore command exists yet.
 - SQLite's `node:sqlite` module is marked experimental on some supported Node versions.
 - No background scheduler, recovery queue or remote delivery exists in this release.
+
+## HTTP API (v0.2)
+
+The v0.2 HTTP service reuses the existing v0.1 database schema and domain functions. It adds no migrations, processing workers or external dependencies at runtime. When a POST arrives, it validates the JSON envelope, applies the same 64 KiB canonical-payload limit and commits the record and acceptance event in one transaction. The server uses a 96 KiB raw-body limit and a 15-second request timeout.
+
+Each request gets a generated request ID in the response header and body. CLI and HTTP writes use the same `(source, idempotency_key)` unique constraint, so a retry across those interfaces has the same result. An idempotency key is a retry identifier, not a business-level duplicate detector.
+
+List pagination uses `LIMIT/OFFSET` with a maximum offset of 10000. New submissions may change the ordering between pages. Export or a database-level snapshot should be used for consistent full-ledger processing.
+
+All `/v1` routes require one bearer token. The `/health` route is intentionally public and reports only whether the process is listening. API request logs contain method, status, time and request ID, not the payload or token. This version has no TLS listener, user-specific permissions, rate limiter, retention handling or encryption at rest. Bind to loopback for local use; do not expose the service directly to an untrusted network.
+
+`/v1/ledger/verify` performs the existing full ledger check synchronously. It is an operator tool, not a lightweight health probe. On large ledgers the event loop can be blocked during that check. A later version should move expensive validation to a dedicated worker.
+
+The linked SHA-256 event hashes are consistency checks, not authenticated records. A database administrator can recalculate the chain after modifying data. Do not describe this as a cryptographically tamper-proof audit log.

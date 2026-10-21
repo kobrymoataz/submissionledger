@@ -1,12 +1,10 @@
 # Contributing
 
-Thanks for considering a contribution.
+Thanks for considering a contribution. Changes that make the existing contract clearer or more reliable are especially welcome.
 
-SubmissionLedger is deliberately small at this stage. Before proposing a large feature, open an issue to discuss the scope and expected behavior.
+## Local checks
 
-## Setup
-
-Node.js 22.13 or newer is required. Node 24 is recommended.
+Use Node.js 22.13 or newer, preferably Node 24.
 
 ```bash
 npm ci
@@ -15,13 +13,15 @@ npm test
 npm run build
 ```
 
+The HTTP tests start short-lived local servers with temporary SQLite files. No external database or internet connection is needed after dependencies are installed.
+
 ## Pull requests
 
-1. Create a short branch from `main`.
-2. Keep the change focused and add a regression test when fixing a bug.
-3. Update the relevant documentation if a command or behavior changes.
-4. Run the checks above, then open a pull request with a brief explanation and manual reproduction steps.
+1. Branch from `main` and keep the change focused.
+2. Include a regression test for behavior changes. For API changes, cover HTTP status codes and authentication.
+3. Update the documentation and OpenAPI definition if the endpoint contract changes.
+4. Run the checks and describe any compatibility concerns in the pull request.
 
-If you change the database schema, describe migrations and compatibility before implementation. Never commit live submissions, tokens or personal data.
+A schema change needs an explicit migration plan. Do not commit real submissions, local SQLite files, bearer tokens, backups or other private data.
 
-Contributions are reviewed for correctness, clarity and their effect on the local-first model.
+Before submitting large feature proposals, open an issue so maintainers can discuss scope and expected behavior.

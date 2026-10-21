@@ -1,0 +1,9 @@
+{
+  "source": "website",
+  "payload": {
+    "reference": "EXAMPLE-0001",
+    "type": "application",
+    "applicant": "Sample Applicant",
+    "programme": "Computing"
+  }
+}

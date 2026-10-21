@@ -1,0 +1,126 @@
+openapi: 3.1.0
+info:
+  title: SubmissionLedger API
+  version: 0.2.0
+  summary: Authenticated local intake with explicit retry semantics
+  description: The API stores JSON submissions in a local SQLite ledger. HTTPS and network controls are not built into the application.
+servers:
+  - url: http://127.0.0.1:8787
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Process health
+      security: []
+      responses:
+        '200':
+          description: Process is running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+  /v1/submissions:
+    post:
+      summary: Accept a submission
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payload]
+              additionalProperties: false
+              properties:
+                source:
+                  type: string
+                  default: api
+                  minLength: 1
+                  maxLength: 64
+                payload:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '201':
+          description: Newly accepted submission
+        '200':
+          description: Existing submission replayed
+        '409':
+          description: Same source and key used with different data
+        '422':
+          description: Invalid payload or fields
+    get:
+      summary: List submission summaries
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 10000
+            default: 0
+        - name: source
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paged submission summaries, without payloads
+  /v1/submissions/{id}:
+    get:
+      summary: Read a submission
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Full submission including payload
+        '404':
+          description: Submission not found
+  /v1/stats:
+    get:
+      summary: Ledger statistics
+      responses:
+        '200':
+          description: Counts and source breakdown
+  /v1/ledger/verify:
+    get:
+      summary: Check ledger integrity
+      description: HTTP 200 may contain ok false when inconsistencies are found.
+      responses:
+        '200':
+          description: Consistency report
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  schemas:
+    Envelope:
+      type: object
+      required: [data, requestId]
+      properties:
+        data: {}
+        requestId:
+          type: string
+          format: uuid
