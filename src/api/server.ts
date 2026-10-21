@@ -6,6 +6,7 @@ import { ledgerStats } from '../ledger/submissions.js';
 import { VERSION } from '../version.js';
 import { HttpError } from './errors.js';
 import { requireBearer, validateApiToken } from './security.js';
+import { handleRoutes } from './routes.js';
 import { createContext, ensureMethod, fail, ok } from './transport.js';
 
 export interface ApiLog {
@@ -48,6 +49,8 @@ export function createApiServer(options: ApiOptions): Server {
       }
       if (pathname === '/v1' || pathname.startsWith('/v1/')) {
         requireBearer(request, token);
+        await handleRoutes(request, response, context, options.dbPath);
+        return;
       }
       throw new HttpError(404, 'not_found', 'Endpoint not found.');
     } catch (error) {

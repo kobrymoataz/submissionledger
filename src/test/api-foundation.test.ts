@@ -42,7 +42,7 @@ test('private routes require the exact token', async () => {
   await serverFixture(async (url) => {
     assert.equal((await fetch(`${url}/v1/submissions`)).status, 401);
     assert.equal((await fetch(`${url}/v1/submissions`, { headers: { Authorization: 'Bearer wrong-token' } })).status, 401);
-    assert.equal((await fetch(`${url}/v1/submissions`, { headers: { Authorization: `Bearer ${TOKEN}` } })).status, 404);
+    assert.equal((await fetch(`${url}/v1/submissions`, { headers: { Authorization: `Bearer ${TOKEN}` } })).status, 200);
   });
 });
 
