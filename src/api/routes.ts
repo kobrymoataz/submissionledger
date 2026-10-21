@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { InputError } from '../core/errors.js';
 import type { SubmitInput } from '../core/types.js';
-import { acceptSubmission, getSubmission, listSubmissions } from '../ledger/submissions.js';
+import { acceptSubmission, getSubmission, ledgerStats, pageSubmissions } from '../ledger/submissions.js';
+import { verifyLedger } from '../ledger/verification.js';
 import { HttpError } from './errors.js';
 import { ensureMethod, ok, readJsonBody } from './transport.js';
 import type { RequestContext } from './transport.js';
@@ -45,18 +46,31 @@ export async function handleRoutes(
     ensureMethod(request.method, 'GET');
     const query = context.url.searchParams;
     for (const key of query.keys()) {
-      if (key !== 'source' && key !== 'limit') throw new HttpError(400, 'invalid_query', `Unknown query parameter: ${key}.`);
+      if (key !== 'source' && key !== 'limit' && key !== 'offset') throw new HttpError(400, 'invalid_query', `Unknown query parameter: ${key}.`);
       if (query.getAll(key).length !== 1) throw new HttpError(400, 'invalid_query', `Duplicate query parameter: ${key}.`);
     }
     const rawLimit = query.get('limit');
     if (rawLimit !== null && !/^[1-9]\d*$/.test(rawLimit)) {
       throw new HttpError(400, 'invalid_query', 'Limit must be a whole number between 1 and 100.');
     }
-    const options: { source?: string; limit?: number } = {};
+    const rawOffset = query.get('offset');
+    if (rawOffset !== null && !/^(0|[1-9]\d*)$/.test(rawOffset)) {
+      throw new HttpError(400, 'invalid_query', 'Offset must be a whole number from 0 to 10000.');
+    }
+    const options: { source?: string; limit?: number; offset?: number } = {};
     if (rawLimit !== null) options.limit = Number(rawLimit);
+    if (rawOffset !== null) options.offset = Number(rawOffset);
     if (query.has('source')) options.source = query.get('source') ?? '';
-    const items = listSubmissions(dbPath, options);
-    ok(response, context, 200, { items, limit: options.limit ?? 20 });
+    const page = pageSubmissions(dbPath, options);
+    ok(response, context, 200, page);
+    return;
+  }
+
+  if (pathname === '/v1/stats' || pathname === '/v1/ledger/verify') {
+    ensureMethod(request.method, 'GET');
+    if (context.url.search) throw new HttpError(400, 'invalid_query', 'This endpoint does not accept query parameters.');
+    const result = pathname === '/v1/stats' ? ledgerStats(dbPath) : verifyLedger(dbPath);
+    ok(response, context, 200, result);
     return;
   }
 

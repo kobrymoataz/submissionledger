@@ -118,3 +118,31 @@ export function ledgerStats(path: string): LedgerStats {
     };
   });
 }
+
+/** Offset pagination for the HTTP API. The CLI list behavior is unchanged. */
+export function pageSubmissions(
+  path: string,
+  options: { source?: string; limit?: number; offset?: number } = {},
+): { items: SubmissionSummary[]; limit: number; offset: number; hasMore: boolean; nextOffset: number | null } {
+  const limit = validateLimit(options.limit ?? 20);
+  const offset = options.offset ?? 0;
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10_000) {
+    throw new InputError('Offset must be a whole number between 0 and 10000.');
+  }
+  const source = options.source === undefined ? undefined : validateSource(options.source);
+  return withLedger(path, (db) => {
+    const rows = source === undefined
+      ? db.prepare('SELECT * FROM submissions ORDER BY received_at DESC, id DESC LIMIT ? OFFSET ?')
+        .all(limit + 1, offset)
+      : db.prepare('SELECT * FROM submissions WHERE source = ? ORDER BY received_at DESC, id DESC LIMIT ? OFFSET ?')
+        .all(source, limit + 1, offset);
+    const hasMore = rows.length > limit;
+    return {
+      items: (rows.slice(0, limit) as unknown as SubmissionRow[]).map(toSummary),
+      limit,
+      offset,
+      hasMore,
+      nextOffset: hasMore ? offset + limit : null,
+    };
+  });
+}
