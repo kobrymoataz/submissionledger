@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createApiServer } from './server.js';
 import { validateApiToken } from './security.js';
+import { loadWebhookConfig } from '../worker/config.js';
 
 function parsePort(raw: string): number {
   const value = Number(raw);
@@ -15,9 +16,12 @@ try {
   const dbPath = process.env.SUBMISSIONLEDGER_DB ?? '.submissionledger/ledger.sqlite';
   const host = process.env.SUBMISSIONLEDGER_API_HOST ?? '127.0.0.1';
   const port = parsePort(process.env.SUBMISSIONLEDGER_API_PORT ?? '8787');
+  const configPath = process.env.SUBMISSIONLEDGER_DELIVERY_CONFIG;
+  const deliveryConfig = configPath ? loadWebhookConfig(configPath, process.env.SUBMISSIONLEDGER_ALLOW_LOCAL_HTTP === '1') : undefined;
   const server = createApiServer({
     dbPath,
     token,
+    ...(deliveryConfig ? { deliveryConfig } : {}),
     onRequest: ({ requestId, method, status, durationMs }) => {
       console.log(`${new Date().toISOString()} ${requestId} ${method} ${status} ${durationMs}ms`);
     },

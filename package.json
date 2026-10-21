@@ -1,7 +1,7 @@
 {
   "name": "submissionledger",
-  "version": "0.2.0",
-  "description": "Local-first submission intake with SQLite, an authenticated HTTP API and auditable event history.",
+  "version": "0.3.0",
+  "description": "Local-first submission intake with durable webhook outbox, signed delivery workers and an auditable event ledger.",
   "type": "module",
   "private": false,
   "license": "MIT",

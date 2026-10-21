@@ -8,6 +8,7 @@ import { HttpError } from './errors.js';
 import { requireBearer, validateApiToken } from './security.js';
 import { handleRoutes } from './routes.js';
 import { createContext, ensureMethod, fail, ok } from './transport.js';
+import type { WebhookConfig } from '../worker/config.js';
 
 export interface ApiLog {
   requestId: string;
@@ -19,11 +20,13 @@ export interface ApiLog {
 export interface ApiOptions {
   dbPath: string;
   token: string;
+  deliveryConfig?: WebhookConfig;
   onRequest?: (entry: ApiLog) => void;
 }
 
 export function createApiServer(options: ApiOptions): Server {
   const token = validateApiToken(options.token);
+  const allowedDestinations = new Set(Object.keys(options.deliveryConfig?.destinations ?? {}));
   // Fail at startup if the database has not been initialized or has an unsupported schema.
   ledgerStats(options.dbPath);
 
@@ -49,7 +52,7 @@ export function createApiServer(options: ApiOptions): Server {
       }
       if (pathname === '/v1' || pathname.startsWith('/v1/')) {
         requireBearer(request, token);
-        await handleRoutes(request, response, context, options.dbPath);
+        await handleRoutes(request, response, context, options.dbPath, allowedDestinations);
         return;
       }
       throw new HttpError(404, 'not_found', 'Endpoint not found.');

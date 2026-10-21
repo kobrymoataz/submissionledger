@@ -23,7 +23,7 @@ function withTemporaryDirectory(run: (cwd: string) => void): void {
 
 test('CLI shows its version and available commands', () => {
   withTemporaryDirectory((cwd) => {
-    assert.equal(runCli(cwd, '--version').stdout.trim(), '0.2.0');
+    assert.equal(runCli(cwd, '--version').stdout.trim(), '0.3.0');
     assert.match(runCli(cwd, 'help').stdout, /submissionledger submit/);
   });
 });
@@ -70,5 +70,33 @@ test('CLI rejects invalid options and invalid JSON', () => {
     assert.equal(runCli(cwd, 'submit', '--data', '{}', '--file', 'x').status, 2);
     assert.equal(runCli(cwd, 'list', '--limit', '0').status, 2);
     assert.equal(runCli(cwd, 'list', '--unknown').status, 2);
+  });
+});
+
+test('CLI can atomically enqueue, list and inspect delivery jobs with configured targets', () => {
+  withTemporaryDirectory((cwd) => {
+    writeFileSync(join(cwd, 'webhooks.json'), JSON.stringify({ destinations: {
+      audit: { url: 'http://127.0.0.1:9998/test', secretEnv: 'SL_AUDIT_TEST_SECRET' },
+    } }));
+    assert.equal(runCli(cwd, 'init').status, 0);
+    const saved = runCli(cwd, 'submit', '--data', '{"ok":true}', '--key', 'cli-webhook-1',
+      '--deliver-to', 'audit', '--config', 'webhooks.json', '--allow-local-http', '--json');
+    assert.equal(saved.status, 0, saved.stderr);
+    const submit = JSON.parse(saved.stdout) as { submission: { id: string } };
+    const replay = runCli(cwd, 'submit', '--data', '{"ok":true}', '--key', 'cli-webhook-1',
+      '--deliver-to', 'audit', '--config', 'webhooks.json', '--allow-local-http', '--json');
+    assert.equal(replay.status, 0, replay.stderr);
+    const page = runCli(cwd, 'deliveries');
+    assert.equal(page.status, 0, page.stderr);
+    const list = JSON.parse(page.stdout) as { total: number; items: Array<{ id: string }> };
+    assert.equal(list.total, 1);
+    assert.equal(runCli(cwd, 'delivery', list.items[0]?.id ?? '').status, 0);
+    const again = runCli(cwd, 'enqueue', '--submission', submit.submission.id,
+      '--destination', 'audit', '--config', 'webhooks.json', '--allow-local-http');
+    assert.equal(again.status, 0, again.stderr);
+    assert.equal((JSON.parse(again.stdout) as { created: boolean }).created, false);
+    assert.equal(runCli(cwd, 'delivery-stats').status, 0);
+    assert.equal(runCli(cwd, 'enqueue', '--submission', submit.submission.id,
+      '--destination', 'unlisted', '--config', 'webhooks.json', '--allow-local-http').status, 2);
   });
 });
